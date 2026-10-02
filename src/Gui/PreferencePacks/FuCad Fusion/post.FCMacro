@@ -1,0 +1,104 @@
+# FuCad Fusion pack: installs the FusionGrid add-on (a fixed XY grid in every 3D
+# view, 10 mm lines with every 5th emphasised, like Fusion's sketch grid) into the
+# user's Mod folder and starts it right away. Removing Mod/FusionGrid undoes it.
+import os
+
+import FreeCAD
+
+GRID_MODULE = '''"""FusionGrid: a fixed XY grid (+/-300 mm, 10 mm, major every 50 mm) in each 3D view."""
+import FreeCADGui
+from pivy import coin
+
+NAME = "FusionGrid"
+EXTENT = 300.0
+STEP = 10.0
+MAJOR = 5
+
+_timer = None
+
+
+def _layer(points, color, width):
+    separator = coin.SoSeparator()
+    base_color = coin.SoBaseColor()
+    base_color.rgb = color
+    style = coin.SoDrawStyle()
+    style.lineWidth = width
+    coordinates = coin.SoCoordinate3()
+    coordinates.point.setValues(0, len(points), points)
+    lines = coin.SoLineSet()
+    lines.numVertices.setValues(0, len(points) // 2, [2] * (len(points) // 2))
+    for node in (base_color, style, coordinates, lines):
+        separator.addChild(node)
+    return separator
+
+
+def build():
+    fine, major = [], []
+    count = int(EXTENT / STEP)
+    for i in range(-count, count + 1):
+        v = i * STEP
+        target = major if i % MAJOR == 0 else fine
+        target += [(v, -EXTENT, 0), (v, EXTENT, 0), (-EXTENT, v, 0), (EXTENT, v, 0)]
+    root = coin.SoSeparator()
+    root.setName(NAME)
+    pick = coin.SoPickStyle()
+    pick.style = coin.SoPickStyle.UNPICKABLE
+    root.addChild(pick)
+    root.addChild(_layer(fine, (0.72, 0.72, 0.75), 1.0))
+    root.addChild(_layer(major, (0.45, 0.45, 0.5), 1.5))
+    return root
+
+
+def attach():
+    document = FreeCADGui.ActiveDocument
+    if document is None:
+        return
+    view = document.ActiveView
+    if not hasattr(view, "getSceneGraph"):
+        return
+    graph = view.getSceneGraph()
+    for index in range(graph.getNumChildren()):
+        if graph.getChild(index).getName() == NAME:
+            return
+    graph.insertChild(build(), 0)
+
+
+def install():
+    global _timer
+    if _timer is not None:
+        return
+    from PySide import QtCore, QtWidgets
+
+    window = FreeCADGui.getMainWindow()
+    area = window.findChild(QtWidgets.QMdiArea)
+    if area is not None:
+        area.subWindowActivated.connect(lambda *_: QtCore.QTimer.singleShot(0, attach))
+    # New views appear without an activation signal in some cases; attach is idempotent.
+    _timer = QtCore.QTimer(window)
+    _timer.timeout.connect(attach)
+    _timer.start(1500)
+'''
+
+INIT_GUI = '''# InitGui runs without shared globals, so the logic lives in an importable module.
+import fusiongrid
+
+fusiongrid.install()
+'''
+
+target = os.path.join(FreeCAD.getUserAppDataDir(), "Mod", "FusionGrid")
+os.makedirs(target, exist_ok=True)
+with open(os.path.join(target, "fusiongrid.py"), "w", encoding="utf-8") as handle:
+    handle.write(GRID_MODULE)
+with open(os.path.join(target, "InitGui.py"), "w", encoding="utf-8") as handle:
+    handle.write(INIT_GUI)
+
+import sys
+
+if target not in sys.path:
+    sys.path.append(target)
+try:
+    import fusiongrid
+
+    fusiongrid.install()
+except Exception as error:  # the grid is a convenience; never break applying the pack
+    FreeCAD.Console.PrintWarning(f"FusionGrid could not start now, it will after a restart: {error}\n")
