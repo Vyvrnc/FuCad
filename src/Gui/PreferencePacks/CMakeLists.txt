@@ -8,6 +8,7 @@ SET(PreferencePacks_Directories
         "Light"
         "Dark"
         "FuCad Dark"
+        "FuCad Fusion"
 )
 
 ADD_CUSTOM_TARGET(PreferencePacks_data ALL
