@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include <QPointer>
 #include <QWidgetAction>
 #include <QCoreApplication>
 
@@ -66,11 +67,14 @@ private:
     ParameterGrp::handle getParameterPath();
 
 private:
-    QCheckBox* gridShow;
-    QCheckBox* gridAutoSpacing;
-    QCheckBox* snapToGrid;
-    QLabel* sizeLabel;
-    Gui::QuantitySpinBox* gridSizeBox;
+    // Owned by the widget from createWidget(); QPointer resets to null when it is
+    // deleted, and they are null until the first widget exists. languageChange()
+    // runs on every language change, also before that (crash on LanguageChange).
+    QPointer<QCheckBox> gridShow;
+    QPointer<QCheckBox> gridAutoSpacing;
+    QPointer<QCheckBox> snapToGrid;
+    QPointer<QLabel> sizeLabel;
+    QPointer<Gui::QuantitySpinBox> gridSizeBox;
 };
 
 
