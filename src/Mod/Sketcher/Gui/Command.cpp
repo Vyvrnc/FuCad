@@ -1470,7 +1470,7 @@ void GridSpaceAction::updateWidget()
 {
     auto* sketchView = getView();
 
-    if (sketchView) {
+    if (sketchView && gridShow && gridAutoSpacing && snapToGrid && gridSizeBox) {
 
         auto updateCheckBox = [](QCheckBox* checkbox, bool value) {
             auto checked = checkbox->checkState() == Qt::Checked;
@@ -1501,6 +1501,10 @@ void GridSpaceAction::updateWidget()
 
 void GridSpaceAction::languageChange()
 {
+    if (!gridShow || !gridAutoSpacing || !snapToGrid || !sizeLabel || !gridSizeBox) {
+        return;
+    }
+
     gridShow->setText(tr("Display grid"));
     gridShow->setToolTip(tr("Toggles the visibility of the grid in the active sketch"));
     gridShow->setStatusTip(gridAutoSpacing->toolTip());
