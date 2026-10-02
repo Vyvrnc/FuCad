@@ -56,7 +56,9 @@ jobs:
           echo "BUILD_TAG=$BUILD_TAG" >> "$GITHUB_ENV"
           python3 package/scripts/write_version_info.py ../fucad_version.txt
           cd package/rattler-build
-          pixi install --frozen
+          # Not --frozen: pixi.lock resolves the recipe's host environment, and
+          # this branch adds defusedxml there (the Addon Manager's CMake check).
+          pixi install
           pixi run -e package create_bundle
 
       - name: Publish release
