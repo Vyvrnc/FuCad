@@ -52,7 +52,7 @@ jobs:
           UPLOAD_RELEASE: "false"
         run: |
           set -euo pipefail
-          export BUILD_TAG="arm64-$(date -u +%Y.%m.%d)"
+          export BUILD_TAG="arm64-$(date -u +%Y.%m.%d)-${{ github.run_number }}"
           echo "BUILD_TAG=$BUILD_TAG" >> "$GITHUB_ENV"
           python3 package/scripts/write_version_info.py ../fucad_version.txt
           cd package/rattler-build
