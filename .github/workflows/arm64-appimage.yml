@@ -1,0 +1,72 @@
+# Linux ARM64 AppImage of FuCad for phones (DroidDesk's Debian container on
+# Galaxy Z Fold 7). Upstream FuCad publishes Windows builds only; this reuses
+# its own rattler-build/pixi packaging on GitHub's native ARM runner.
+name: Linux ARM64 AppImage
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Thursday, after upstream's Wednesday weekly tag.
+    - cron: "0 6 * * 4"
+
+permissions:
+  contents: write
+
+jobs:
+  appimage:
+    runs-on: ubuntu-22.04-arm
+    timeout-minutes: 360
+    steps:
+      # prevent running out of disk space, as upstream does
+      - name: Maximize build space
+        uses: AdityaGarg8/remove-unwanted-software@90e01b21170618765a73370fcc3abbd1684a7793 # v5
+        with:
+          remove-android: 'true'
+          remove-cached-tools: 'true'
+
+      - name: Checkout source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          submodules: 'recursive'
+
+      # This branch only adds packaging fixes; build the latest upstream code.
+      - name: Merge upstream main
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git fetch https://github.com/FadyFaheem/FuCad.git main
+          git merge --no-edit FETCH_HEAD
+          git submodule update --init --recursive
+          echo "UPSTREAM_SHA=$(git rev-parse --short FETCH_HEAD)" >> "$GITHUB_ENV"
+
+      - uses: prefix-dev/setup-pixi@a09b6247153796b190642a2b53fac4241043cf6f # v0.10.0
+        with:
+          pixi-version: v0.68.1
+          cache: false
+
+      - name: Build AppImage
+        env:
+          TARGET_PLATFORM: linux-arm64
+          MAKE_INSTALLER: "true"
+          UPLOAD_RELEASE: "false"
+        run: |
+          set -euo pipefail
+          export BUILD_TAG="arm64-$(date -u +%Y.%m.%d)"
+          echo "BUILD_TAG=$BUILD_TAG" >> "$GITHUB_ENV"
+          python3 package/scripts/write_version_info.py ../fucad_version.txt
+          cd package/rattler-build
+          pixi install --frozen
+          pixi run -e package create_bundle
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd package/rattler-build/linux
+          ls -la FuCad_*-Linux-aarch64.AppImage*
+          gh release create "$BUILD_TAG" FuCad_*-Linux-aarch64.AppImage* \
+            --repo "$GITHUB_REPOSITORY" --target arm64-build --prerelease \
+            --title "FuCad Linux ARM64 $BUILD_TAG" \
+            --notes "Unofficial Linux aarch64 AppImage of FuCad (upstream main $UPSTREAM_SHA), built with FuCad's own rattler-build packaging. Without FUSE (e.g. proot): ./FuCad*.AppImage --appimage-extract, then squashfs-root/AppRun."
