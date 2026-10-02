@@ -45,5 +45,15 @@
       <tag>dark</tag>
       <tag>fusion</tag>
     </preferencepack>
+	<preferencepack>
+	  <name>FuCad Fusion</name>
+      <type>Behavior</type>
+      <description>Fusion-style navigation (Shift+middle button orbits), a few extra Fusion shortcuts and a fixed XY grid in every 3D view.</description>
+      <version>1.0.0</version>
+      <tag>built-in</tag>
+      <tag>navigation</tag>
+      <tag>shortcuts</tag>
+      <tag>fusion</tag>
+    </preferencepack>
   </content>
 </package>
