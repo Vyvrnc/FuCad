@@ -1,0 +1,73 @@
+# Linux x86_64 AppImage of FuCad, e.g. for WSL 2 (WSLg) on Windows PCs where Smart App
+# Control blocks the unsigned Windows build. Same packaging as the ARM64 workflow.
+name: Linux x86_64 AppImage
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Thursday, after upstream's Wednesday weekly tag.
+    - cron: "30 6 * * 4"
+
+permissions:
+  contents: write
+
+jobs:
+  appimage:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    steps:
+      # prevent running out of disk space, as upstream does
+      - name: Maximize build space
+        uses: AdityaGarg8/remove-unwanted-software@90e01b21170618765a73370fcc3abbd1684a7793 # v5
+        with:
+          remove-android: 'true'
+          remove-cached-tools: 'true'
+
+      - name: Checkout source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          submodules: 'recursive'
+
+      # This branch only adds packaging fixes; build the latest upstream code.
+      - name: Merge upstream main
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git fetch https://github.com/FadyFaheem/FuCad.git main
+          git merge --no-edit FETCH_HEAD
+          git submodule update --init --recursive
+          echo "UPSTREAM_SHA=$(git rev-parse --short FETCH_HEAD)" >> "$GITHUB_ENV"
+
+      - uses: prefix-dev/setup-pixi@a09b6247153796b190642a2b53fac4241043cf6f # v0.10.0
+        with:
+          pixi-version: v0.68.1
+          cache: false
+
+      - name: Build AppImage
+        env:
+          TARGET_PLATFORM: linux-64
+          MAKE_INSTALLER: "true"
+          UPLOAD_RELEASE: "false"
+        run: |
+          set -euo pipefail
+          export BUILD_TAG="x86_64-$(date -u +%Y.%m.%d)-${{ github.run_number }}"
+          echo "BUILD_TAG=$BUILD_TAG" >> "$GITHUB_ENV"
+          python3 package/scripts/write_version_info.py ../fucad_version.txt
+          cd package/rattler-build
+          # Not --frozen: pixi.lock resolves the recipe's host environment, and
+          # this branch adds defusedxml there (the Addon Manager's CMake check).
+          pixi install
+          pixi run -e package create_bundle
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd package/rattler-build/linux
+          ls -la FuCad_*-Linux-x86_64.AppImage*
+          gh release create "$BUILD_TAG" FuCad_*-Linux-x86_64.AppImage* \
+            --repo "$GITHUB_REPOSITORY" --target arm64-build --prerelease \
+            --title "FuCad Linux x86_64 $BUILD_TAG" \
+            --notes "Unofficial Linux x86_64 AppImage of FuCad (upstream main $UPSTREAM_SHA), built with FuCad's own rattler-build packaging. WSL 2 / without FUSE: ./FuCad*.AppImage --appimage-extract, then squashfs-root/AppRun."
